@@ -1,62 +1,68 @@
-// 1. Traemos la herramienta Express para poder crear las rutas del mesero
-import express from 'express';
+import http from 'http';
 
-const app = express();
-const PORT = 3000; // El número de "mesa" o puerto donde atenderá nuestro servidor
-
-// 2. Le decimos a nuestra API que apunte todo en formato JSON (un formato de texto organizado)
-app.use(express.json());
-
-// 3. Nuestra Base de Datos simulada (La despensa de la cocina con los productos)
+// Nuestra lista de productos en memoria
 let productos = [
-{ id: 1, nombre: "Crema Hidratante Facial", precio: 15.99 },
-{ id: 2, nombre: "Serum Vitamina C", precio: 22.50 },
-{ id: 3, nombre: "Protector Solar SPF 50", precio: 18.00 }
+{ id: 1, nombre: "Labial Matte", precio: 15.50 },
+{ id: 2, nombre: "Base de Maquillaje", precio: 22.00 },
+{ id: 3, nombre: "Corrector de Ojeras", precio: 10.00 }
 ];
 
-// --- AQUÍ EMPIEZAN LAS RUTAS DE LA API REST (Las órdenes que entiende el mesero) ---
+const server = http.createServer((req, res) => {
+res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-// ORDEN 1: Obtener todos los productos (Método GET = Leer)
-// Si el cliente pide ir a /api/productos, le entregamos la lista completa
-app.get('/api/productos', (req, res) => {
-res.json(productos);
-});
-
-// ORDEN 2: Obtener un solo producto usando su ID (Método GET = Leer)
-// Si el cliente pide /api/productos/2, buscamos el producto con ID número 2
-app.get('/api/productos/:id', (req, res) => {
-const idBuscar = parseInt(req.params.id); // Guardamos el número que escribió el cliente
-const producto = productos.find(p => p.id === idBuscar); // Lo buscamos en nuestra despensa
-
-// Si no existe, el mesero responde con un error 404 (No encontrado)
-if (!producto) {
-return res.status(404).json({ mensaje: "Producto no encontrado" });
+// 1. RUTA GET: Ver TODOS los productos (/api/productos)
+if (req.url === '/api/productos' && req.method === 'GET') {
+res.statusCode = 200;
+return res.end(JSON.stringify(productos));
 }
-// Si existe, se lo entregamos
-res.json(producto);
+
+// 2. RUTA GET POR ID: Ver UN solo producto (ejemplo: /api/productos/1)
+if (req.url.startsWith('/api/productos/') && req.method === 'GET') {
+// Separamos la URL por las barras "/" para agarrar el ID que está al final
+const partes = req.url.split('/');
+const idBusca = parseInt(partes[3]); // Esto agarra el número final (ej: 1, 2, 3)
+
+// Buscamos el producto en nuestro arreglo
+const productoEncontrado = productos.find(p => p.id === idBusca);
+
+if (productoEncontrado) {
+res.statusCode = 200;
+return res.end(JSON.stringify(productoEncontrado));
+} else {
+res.statusCode = 404;
+return res.end(JSON.stringify({ mensaje: "Producto no encontrado" }));
+}
+}
+
+// 3. RUTA POST: Agregar un producto nuevo
+if (req.url === '/api/productos' && req.method === 'POST') {
+let body = '';
+
+req.on('data', chunk => {
+body += chunk.toString();
 });
 
-// ORDEN 3: Agregar un nuevo producto (Método POST = Crear/Enviar)
-// El cliente nos envía los datos de un nuevo producto y lo guardamos
-app.post('/api/productos', (req, res) => {
-const nuevoProducto = {
-id: productos.length + 1, // Le asignamos el siguiente ID disponible
-nombre: req.body.nombre, // Guardamos el nombre que nos enviaron
-precio: req.body.precio // Guardamos el precio que nos enviaron
-};
+req.on('end', () => {
+try {
+const nuevoProducto = JSON.parse(body);
+nuevoProducto.id = productos.length + 1;
+productos.push(nuevoProducto);
 
-productos.push(nuevoProducto); // Lo sumamos a nuestra despensa
-
-// Respondemos con el código 201 (Creado con éxito)
-res.status(201).json({ mensaje: "Producto creado con éxito", producto: nuevoProducto });
+res.statusCode = 201;
+res.end(JSON.stringify(nuevoProducto));
+} catch (error) {
+res.statusCode = 400;
+res.end(JSON.stringify({ mensaje: "Error en el formato de los datos" }));
+}
+});
+} else if (!req.url.startsWith('/api/productos')) {
+// Si entran a cualquier otra ruta que no empiece por /api/productos
+res.statusCode = 404;
+res.end(JSON.stringify({ mensaje: "Ruta no encontrada" }));
+}
 });
 
-// 4. Encendemos los fogones de la cocina (Iniciar el servidor)
-// Ruta raíz para dar la bienvenida al usuario
-app.get('/', (req, res) => {
-res.send('<h1>¡Bienvenido a la API REST de Dermacare Store!</h1><p>Usa la ruta <strong>/api/productos</strong> para ver los productos.</p>');
+server.listen(3000, () => {
+console.log("Servidor nativo corriendo en el puerto 3000");
 });
 
-app.listen(PORT, () => {
-console.log(`Servidor de la API corriendo en http://localhost:${PORT}`);
-});
